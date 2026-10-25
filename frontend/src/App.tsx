@@ -1,23 +1,169 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Users, UserPlus, Search, ChevronLeft, ChevronRight, Download, Eye, X, LogOut, ShieldCheck, LoaderCircle, Upload, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
-type Worker={worker_id:string;worker_no:string;name:string;contractor_name:string;joining_date:string;contact_no:string;emergency_contact:string;aadhaar_masked:string;photo_url:string;status:string};
-type PageData={items:Worker[];page:number;page_size:number;total:number;active:number;inactive:number};
-const api=async(path:string, init:RequestInit={}, csrf='')=>{const headers=new Headers(init.headers); if(csrf)headers.set('X-WIR-CSRF',csrf); const r=await fetch('/api'+path,{...init,headers,credentials:'include'}); if(!r.ok){let msg='Request failed';try{msg=(await r.json()).detail||msg}catch{}throw new Error(typeof msg==='string'?msg:'Please check the entered details')} return r;};
-const dateFmt=(s:string)=>new Date(s+'T00:00:00').toLocaleDateString('en-GB');
-export default function App(){
- const [csrf,setCsrf]=useState(''); const [username,setUsername]=useState(''); const [page,setPage]=useState<'manage'|'register'>('manage'); const [data,setData]=useState<PageData>(); const [p,setP]=useState(1); const [q,setQ]=useState(''); const [suggestions,setSuggestions]=useState<{worker_id:string;name:string;worker_no:string}[]>([]); const [selected,setSelected]=useState(''); const [busy,setBusy]=useState(false); const [notice,setNotice]=useState(''); const [err,setErr]=useState(''); const [photo,setPhoto]=useState(''); const [preview,setPreview]=useState(''); const [result,setResult]=useState<Worker|null>(null); const [modal,setModal]=useState<Worker|null>(null); const [form,setForm]=useState({name:'',contractor_name:'',joining_date:'',contact_no:'',emergency_contact:'',aadhaar_no:''}); const fileRef=useRef<HTMLInputElement>(null);
- const load=async()=>{if(!csrf)return;try{const d=await (await api(`/workers?page=${p}&page_size=25${selected?'&name='+encodeURIComponent(q):''}`,{},csrf)).json();setData(d)}catch(e){setErr(String(e))}};
- useEffect(()=>{if(!csrf)return;let active=true;api(`/workers/search?q=${encodeURIComponent(q)}`,{},csrf).then(r=>r.json()).then(v=>active&&setSuggestions(v)).catch(()=>{});return()=>{active=false}},[csrf,q]);
- useEffect(()=>{if(csrf)load()},[csrf,p,selected]);
- const login=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setErr('');const fd=new FormData(e.currentTarget);try{const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({username:fd.get('username'),password:fd.get('password')})});if(!r.ok)throw new Error('Invalid username or password');const v=await r.json();setCsrf(v.csrf_token);setUsername(v.username)}catch(ex){setErr(String(ex))}};
- const download=async(w:Worker)=>{try{const r=await api(`/workers/${w.worker_id}/id-card`,{},csrf);const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`${w.worker_no}.pdf`;a.click();URL.revokeObjectURL(a.href)}catch(ex){setErr(String(ex))}};
- const updateStatus=async(w:Worker,status:string)=>{setData(d=>d&&({...d,items:d.items.map(x=>x.worker_id===w.worker_id?{...x,status}:x)}));try{await api(`/workers/${w.worker_id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})},csrf);setNotice('Worker status saved');await load()}catch(ex){setErr(String(ex));await load()}};
- const fileChange=(f?:File)=>{setErr('');if(preview)URL.revokeObjectURL(preview);setPhoto('');setPreview('');if(!f)return;if(!['image/jpeg','image/jpg'].includes(f.type)||!/\.jpe?g$/i.test(f.name)){setErr('Select a JPG or JPEG image');if(fileRef.current)fileRef.current.value='';return}if(f.size>200*1024){setErr('Photo must be 200 KB or smaller');if(fileRef.current)fileRef.current.value='';return}setPhoto(f.name);setPreview(URL.createObjectURL(f))};
- const submit=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!fileRef.current?.files?.[0]){setErr('Choose a passport-size photo');return}setBusy(true);setErr('');setNotice('');const fd=new FormData();Object.entries(form).forEach(([k,v])=>fd.append(k,v));fd.append('photo',fileRef.current.files[0]);try{const v=await(await api('/workers',{method:'POST',body:fd},csrf)).json();setResult(v);setNotice('Worker registered successfully');await load()}catch(ex){setErr(String(ex))}finally{setBusy(false)}};
- const reset=()=>{setForm({name:'',contractor_name:'',joining_date:'',contact_no:'',emergency_contact:'',aadhaar_no:''});if(fileRef.current)fileRef.current.value='';if(preview)URL.revokeObjectURL(preview);setPreview('');setPhoto('');setErr('')};
- if(!csrf)return <main className="login-wrap"><form className="login" onSubmit={login}><img src="/assets/abb-logo.svg"/><h1>WIR — Worker ID & Registration</h1><p>Sign in with your authorized administrator account.</p><label>Username<input name="username" required autoComplete="username"/></label><label>Password<input type="password" name="password" required autoComplete="current-password"/></label>{err&&<div className="error"><AlertCircle size={16}/>{err}</div>}<button className="primary full"><ShieldCheck size={16}/> Sign in</button><small>Access is restricted to provisioned WIR administrators.</small></form></main>;
- return <div className="shell"><aside className="nav"><img src="/assets/abb-logo.svg" className="logo"/><div className="brand">WIR <span>Worker ID & Registration</span></div><div className="navlabel">MODULE</div><button className={page==='manage'?'navitem active':'navitem'} onClick={()=>{setPage('manage');setErr('')}}><Users size={17}/>Worker Management</button><button className={page==='register'?'navitem active':'navitem'} onClick={()=>{setPage('register');setResult(null);setErr('')}}><UserPlus size={17}/>Worker Registration</button><div className="navbottom"><span>{username}</span><button title="Sign out" onClick={async()=>{await api('/auth/logout',{method:'POST'},csrf).catch(()=>{});setCsrf('')}}><LogOut size={16}/></button></div></aside>
- <main className="main">{err&&<div className="toast error"><AlertCircle size={17}/>{err}<button onClick={()=>setErr('')}><X size={15}/></button></div>}{notice&&<div className="toast success"><CheckCircle2 size={17}/>{notice}<button onClick={()=>setNotice('')}><X size={15}/></button></div>}
- {page==='manage'?<><header className="pagehead"><div><div className="eyebrow">WIR / WORKERS</div><h1>Worker Management</h1><p>Manage registered workers, review details, and maintain worker status.</p></div><button className="primary" onClick={()=>{setPage('register');setErr('')}}><UserPlus size={16}/> Register worker</button></header><div className="stats"><div><span>Total Workers</span><b>{data?.total??'—'}</b></div><div><span>Active Workers</span><b>{data?.active??'—'}</b></div><div><span>Inactive Workers</span><b>{data?.inactive??'—'}</b></div></div><section className="panel"><div className="filters"><label className="searchbox"><Search size={16}/><input placeholder="Filter by worker name" value={q} onChange={e=>{setQ(e.target.value);setSelected('');setP(1)}}/><button className="clear" onClick={()=>{setQ('');setSelected('')}} aria-label="Clear filter"><X size={15}/></button></label><span>{data?.total??0} workers</span></div>{q&&suggestions.length>0&&<div className="suggestions">{suggestions.map(x=><button key={x.worker_id} onClick={()=>{setSelected(x.worker_id);setQ(x.name);setSuggestions([])}}>{x.name}<small>{x.worker_no}</small></button>)}</div>}<div className="tablewrap"><table><thead><tr>{['Worker ID','Worker No.','Name','Contractor Name','Joining Date','Contact No.','Emergency Contact','Aadhaar No.','Photo','Status','Actions'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{!data?<tr><td colSpan={11} className="empty"><LoaderCircle className="spin"/> Loading worker records…</td></tr>:data.items.length===0?<tr><td colSpan={11} className="empty">No workers found.</td></tr>:data.items.map(w=><tr key={w.worker_id}><td className="mono">{w.worker_id}</td><td className="mono">{w.worker_no}</td><td className="strong">{w.name}</td><td>{w.contractor_name}</td><td>{dateFmt(w.joining_date)}</td><td>{w.contact_no}</td><td>{w.emergency_contact}</td><td className="mono">{w.aadhaar_masked}</td><td><button className="thumb" onClick={()=>setModal(w)}><img src={w.photo_url} alt={`${w.name} photo`} onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none'}}/></button></td><td><select className={w.status==='Active'?'status active':'status inactive'} value={w.status} onChange={e=>updateStatus(w,e.target.value)}><option>Active</option><option>Inactive</option></select></td><td><div className="actions"><button title="View details" onClick={()=>setModal(w)}><Eye size={16}/></button><button title="Download ID card" onClick={()=>download(w)}><Download size={16}/></button></div></td></tr>)}</tbody></table></div><div className="pagination"><span>Showing {data?Math.min((p-1)*25+1,data.total):0}–{data?Math.min(p*25,data.total):0} of {data?.total??0}</span><div><button disabled={p<=1} onClick={()=>setP(p-1)}><ChevronLeft size={16}/></button><span>Page {p}</span><button disabled={!data||p*25>=data.total} onClick={()=>setP(p+1)}><ChevronRight size={16}/></button></div></div></section></>:<><header className="pagehead"><div><div className="eyebrow">WIR / WORKERS</div><h1>Worker Registration</h1><p>Register a worker and issue their ABB Plant 3 identity card.</p></div></header>{result?<section className="successbox"><CheckCircle2 size={27}/><h2>Worker registered</h2><p>{result.name} has been added as an active worker.</p><div className="idchips"><span>Worker No. <b>{result.worker_no}</b></span><span>Worker ID <b>{result.worker_id}</b></span></div><div className="rowactions"><button className="primary" onClick={()=>download(result)}><Download size={16}/> Download ID Card PDF</button><button className="secondary" onClick={()=>{reset();setResult(null);setNotice('')}}><UserPlus size={16}/> Register another worker</button></div></section>:<form className="panel formpanel" onSubmit={submit}><div className="formsection"><h2>Worker details</h2><p>Enter the worker’s registered information. Required fields are marked <em>*</em>.</p><div className="grid"><label>Worker Name <em>*</em><input required maxLength={120} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Full name as on records"/></label><label>Contractor Name <em>*</em><input required maxLength={120} value={form.contractor_name} onChange={e=>setForm({...form,contractor_name:e.target.value})} placeholder="Contractor or company"/></label><label>Joining Date <em>*</em><input type="date" required value={form.joining_date} onChange={e=>setForm({...form,joining_date:e.target.value})}/></label><label>Contact No. <em>*</em><input required inputMode="tel" value={form.contact_no} onChange={e=>setForm({...form,contact_no:e.target.value})} placeholder="10-digit phone number"/></label><label>Emergency Contact <em>*</em><input required inputMode="tel" value={form.emergency_contact} onChange={e=>setForm({...form,emergency_contact:e.target.value})} placeholder="10-digit phone number"/></label><label>Aadhaar No. <em>*</em><input required inputMode="numeric" maxLength={14} value={form.aadhaar_no} onChange={e=>setForm({...form,aadhaar_no:e.target.value})} placeholder="12-digit Aadhaar number"/><small>Stored encrypted and masked in worker records. Never printed on the card.</small></label></div></div><div className="formsection"><h2>Passport-size photo</h2><p>JPG or JPEG only; maximum 200 KB.</p><div className="uploadrow"><input ref={fileRef} type="file" accept="image/jpeg,.jpg,.jpeg" onChange={e=>fileChange(e.target.files?.[0])}/>{preview&&<img className="preview" src={preview}/>}<span>{photo||'No photo selected'}</span><button type="button" className="secondary" onClick={()=>fileRef.current?.click()}><Upload size={15}/> Choose photo</button></div></div><div className="formfooter"><span>Worker No., Worker ID, and Active status are assigned automatically.</span><button type="button" className="secondary" onClick={reset}><RotateCcw size={15}/> Reset</button><button className="primary" disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:<UserPlus size={16}/>} Register worker</button></div></form>}</>}
- <footer className="footer">ABB Worker ID & Registration <span>·</span> Internal worker records</footer></main>{modal&&<div className="overlay" onClick={()=>setModal(null)}><section className="detail" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setModal(null)}><X size={18}/></button><img className="detailphoto" src={modal.photo_url}/><div className="eyebrow">WORKER DETAILS</div><h2>{modal.name}</h2><p>{modal.contractor_name}</p><dl><dt>Worker No.</dt><dd>{modal.worker_no}</dd><dt>Worker ID</dt><dd>{modal.worker_id}</dd><dt>Joining Date</dt><dd>{dateFmt(modal.joining_date)}</dd><dt>Contact No.</dt><dd>{modal.contact_no}</dd><dt>Emergency Contact</dt><dd>{modal.emergency_contact}</dd><dt>Aadhaar No.</dt><dd>{modal.aadhaar_masked}</dd><dt>Status</dt><dd>{modal.status}</dd></dl><button className="primary full" onClick={()=>download(modal)}><Download size={16}/> Download ID Card PDF</button></section></div>}</div>
+import React, { useState, useEffect, FormEvent } from 'react';
+import {
+  ShieldCheck,
+  AlertCircle,
+  LoaderCircle,
+} from 'lucide-react';
+import { Role } from './types';
+import { api } from './api';
+import { Navbar, NavPage } from './components/Navbar';
+import { WorkerManagement } from './components/WorkerManagement';
+import { WorkerRegistration } from './components/WorkerRegistration';
+import { GateScanner } from './components/GateScanner';
+import { VisitorManagement } from './components/VisitorManagement';
+import { GateHistory } from './components/GateHistory';
+import { CanteenScanner } from './components/CanteenScanner';
+import { CanteenHistory } from './components/CanteenHistory';
+
+export default function App() {
+  const [csrf, setCsrf] = useState('');
+  const [username, setUsername] = useState('');
+  const [role, setRole] = useState<Role>('ADMIN');
+  const [page, setPage] = useState<NavPage>('workers');
+  const [err, setErr] = useState('');
+
+  // Restore session on mount if cookie is active
+  useEffect(() => {
+    api('/auth/me')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.csrf_token && data.username) {
+          setCsrf(data.csrf_token);
+          setUsername(data.username);
+          const r = (data.role || 'ADMIN') as Role;
+          setRole(r);
+          if (r === 'GATE') setPage('gate-scan');
+          else if (r === 'CANTEEN') setPage('canteen-scan');
+          else setPage('workers');
+        }
+      })
+      .catch(() => {
+        // Not logged in or expired
+      });
+  }, []);
+
+  const login = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErr('');
+    const fd = new FormData(e.currentTarget);
+    try {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          username: fd.get('username'),
+          password: fd.get('password'),
+        }),
+      });
+      if (!r.ok) {
+        throw new Error('Invalid username or password');
+      }
+      const v = await r.json();
+      setCsrf(v.csrf_token);
+      setUsername(v.username);
+      const userRole = (v.role || 'ADMIN') as Role;
+      setRole(userRole);
+
+      // Route to default page for user role
+      if (userRole === 'GATE') {
+        setPage('gate-scan');
+      } else if (userRole === 'CANTEEN') {
+        setPage('canteen-scan');
+      } else {
+        setPage('workers');
+      }
+    } catch (ex: any) {
+      setErr(ex.message || String(ex));
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' }, csrf);
+    } catch {
+      // ignore
+    }
+    setCsrf('');
+    setUsername('');
+    setRole('ADMIN');
+    setPage('workers');
+  };
+
+  if (!csrf) {
+    return (
+      <main className="login-wrap">
+        <form className="login" onSubmit={login}>
+          <img src="/assets/abb-logo.svg" alt="ABB Logo" />
+          <h1>WIR — Worker ID & Registration</h1>
+          <p>Sign in with your authorized portal credentials.</p>
+
+          <label>
+            Username
+            <input name="username" required autoComplete="username" />
+          </label>
+
+          <label>
+            Password
+            <input type="password" name="password" required autoComplete="current-password" />
+          </label>
+
+          {err && (
+            <div className="error">
+              <AlertCircle size={16} />
+              {err}
+            </div>
+          )}
+
+          <button className="primary full" type="submit">
+            <ShieldCheck size={16} /> Sign in
+          </button>
+          <small>Access is restricted to provisioned ABB Workforce360 operators.</small>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <div className="shell">
+      <Navbar
+        page={page}
+        setPage={setPage}
+        username={username}
+        role={role}
+        onLogout={logout}
+      />
+
+      <main className="main">
+        {page === 'workers' && (
+          <WorkerManagement
+            csrf={csrf}
+            onNavigateRegister={() => setPage('register-worker')}
+          />
+        )}
+        {page === 'register-worker' && (
+          <WorkerRegistration csrf={csrf} />
+        )}
+        {page === 'gate-scan' && (
+          <GateScanner csrf={csrf} />
+        )}
+        {page === 'visitors' && (
+          <VisitorManagement csrf={csrf} />
+        )}
+        {page === 'gate-history' && (
+          <GateHistory csrf={csrf} />
+        )}
+        {page === 'canteen-scan' && (
+          <CanteenScanner csrf={csrf} />
+        )}
+        {page === 'canteen-history' && (
+          <CanteenHistory csrf={csrf} />
+        )}
+
+        <footer className="footer">
+          ABB Workforce360 <span>·</span> Plant 3 Operations & Services
+        </footer>
+      </main>
+    </div>
+  );
 }

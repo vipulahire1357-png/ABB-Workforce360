@@ -1,1 +1,1 @@
-{"root":["./src/app.test.tsx","./src/app.tsx","./src/main.tsx"],"version":"5.8.3"}
+{"root":["./src/app.test.tsx","./src/app.tsx","./src/api.ts","./src/main.tsx","./src/types.ts","./src/components/canteenhistory.tsx","./src/components/canteenscanner.tsx","./src/components/gatehistory.tsx","./src/components/gatescanner.tsx","./src/components/navbar.tsx","./src/components/visitormanagement.tsx","./src/components/workermanagement.tsx","./src/components/workerregistration.tsx"],"version":"5.8.3"}

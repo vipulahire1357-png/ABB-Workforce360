@@ -20,26 +20,25 @@ from backend.services.identity import new_worker_id, encrypt_aadhaar
 from backend.services.photos import validate_photo, save_photo
 from backend.services.cards import card_pdf, CardAssetError
 
+from backend.auth import current_admin, require_role, serializer, hasher
+from backend.routes.gate import router as gate_router
+from backend.routes.visitors import router as visitors_router
+from backend.routes.canteen import router as canteen_router
+
 @asynccontextmanager
 async def lifespan(_app):
-    settings.validate_secrets(); init_db(); settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.validate_secrets()
+    init_db()
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.visitor_upload_dir.mkdir(parents=True, exist_ok=True)
     yield
 
-app = FastAPI(title="ABB Worker ID & Registration", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ABB Workforce360", version="2.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[settings.allowed_origin], allow_credentials=True, allow_methods=["GET","POST","PATCH"], allow_headers=["Content-Type","X-WIR-CSRF"])
-serializer = URLSafeTimedSerializer(settings.session_secret or "unconfigured")
-hasher = PasswordHasher()
 
-def current_admin(request: Request, db: Session = Depends(get_db)):
-    token = request.cookies.get("wir_session")
-    try:
-        payload = serializer.loads(token, max_age=8*60*60) if token else None
-    except (BadSignature, SignatureExpired): payload = None
-    if not payload or not isinstance(payload, dict): raise HTTPException(401, "Authentication required")
-    if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("X-WIR-CSRF") != payload.get("csrf"): raise HTTPException(403, "CSRF validation failed")
-    admin = db.scalar(select(Admin).where(Admin.username == payload.get("sub")))
-    if not admin: raise HTTPException(401, "Authentication required")
-    return admin
+app.include_router(gate_router)
+app.include_router(visitors_router)
+app.include_router(canteen_router)
 
 @app.get("/api/health")
 def health(db: Session = Depends(get_db)):
@@ -61,7 +60,13 @@ def login(body: LoginInput, response: Response, db: Session = Depends(get_db)):
     csrf=hmac.new(settings.csrf_secret.encode(),nonce.encode(),hashlib.sha256).hexdigest()
     token=serializer.dumps({"sub":admin.username,"csrf":csrf})
     response.set_cookie("wir_session",token,httponly=True,secure=settings.cookie_secure,samesite="strict",max_age=8*60*60,path="/")
-    return {"username":admin.username,"csrf_token":csrf}
+    return {"username":admin.username,"role":getattr(admin, "role", "ADMIN"),"csrf_token":csrf}
+
+@app.get("/api/auth/me")
+def me(request: Request, admin: Admin = Depends(current_admin)):
+    token = request.cookies.get("wir_session")
+    payload = serializer.loads(token, max_age=8*60*60)
+    return {"username":admin.username,"role":getattr(admin, "role", "ADMIN"),"csrf_token":payload.get("csrf")}
 
 @app.post("/api/auth/logout")
 def logout(response: Response, _: Admin=Depends(current_admin)):

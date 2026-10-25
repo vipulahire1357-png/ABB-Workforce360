@@ -15,8 +15,14 @@ def init_db():
     from backend import models
     if settings.database_url.startswith("sqlite:///"):
         from pathlib import Path
-        Path(settings.database_url.removeprefix("sqlite:///" )).parent.mkdir(parents=True, exist_ok=True)
+        Path(settings.database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    if settings.database_url.startswith("sqlite"):
+        with engine.connect() as conn:
+            cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(admins)").fetchall()]
+            if cols and "role" not in cols:
+                conn.exec_driver_sql("ALTER TABLE admins ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'ADMIN'")
+                conn.commit()
 
 def get_db():
     db = SessionLocal()
