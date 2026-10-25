@@ -7,11 +7,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="WIR_", env_file=".env", extra="ignore")
     database_url: str = f"sqlite:///{ROOT / 'data' / 'wir.sqlite3'}"
     upload_dir: Path = ROOT / "data" / "uploads" / "workers"
+    visitor_upload_dir: Path = ROOT / "data" / "uploads" / "visitors"
     logo_path: Path = ROOT / "assets" / "abb-logo.svg"
     session_secret: str = ""
     csrf_secret: str = ""
     worker_id_secret: str = ""
+    visitor_id_secret: str = ""
     aadhaar_encryption_key: str = ""
+    site_timezone: str = "Asia/Kolkata"
     cookie_secure: bool = False
     allowed_origin: str = "http://127.0.0.1:8000"
 
