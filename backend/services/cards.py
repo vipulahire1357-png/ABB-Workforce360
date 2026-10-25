@@ -155,6 +155,16 @@ def _draw_barcode(c: canvas.Canvas, worker, y: float, max_width: float, regular:
     c.drawCentredString(W / 2, y - 2.2 * mm, worker.worker_id)
 
 
+def _format_contact(value: str) -> str:
+    """Format local Indian 10-digit numbers like the supplied card reference."""
+    digits = str(value)
+    if len(digits) == 10:
+        return f"+91 {digits[:5]} {digits[5:]}"
+    if len(digits) == 12 and digits.startswith("91"):
+        return f"+91 {digits[2:7]} {digits[7:]}"
+    return digits
+
+
 def _photo_reader(worker) -> ImageReader:
     photo_path = settings.upload_dir / Path(worker.photo_path).name
     try:
@@ -203,14 +213,14 @@ def _draw_back(c: canvas.Canvas, worker, regular: str, bold: str) -> None:
     rows = (
         ("WORKER NO.", worker.worker_no),
         ("JOINING DATE", worker.joining_date.strftime("%d/%m/%Y")),
-        ("CONTACT NO.", worker.contact_no),
-        ("EMERGENCY CONTACT", worker.emergency_contact),
+        ("CONTACT NO.", _format_contact(worker.contact_no)),
+        ("EMERGENCY CONTACT", _format_contact(worker.emergency_contact)),
     )
     label_x, value_right = 5 * mm, W - 5 * mm
-    baselines = (62 * mm, 51 * mm, 40 * mm, 29 * mm)
+    baselines = (62.5 * mm, 50.5 * mm, 38.5 * mm, 26.5 * mm)
     label_size, value_size = 5.8, 6.6
-    c.setFillColor(NAVY)
     for (label, value), baseline in zip(rows, baselines):
+        c.setFillColor(MUTED)
         c.setFont(bold, label_size)
         c.drawString(label_x, baseline, label)
         available = value_right - label_x
@@ -223,8 +233,13 @@ def _draw_back(c: canvas.Canvas, worker, regular: str, bold: str) -> None:
                 raise ValueError(f"{label} value cannot fit on the card without overlap")
         else:
             value_text = str(value)
+        c.setFillColor(NAVY)
         c.setFont(regular, fitted_size)
-        c.drawRightString(value_right, baseline - 3.5 * mm, value_text)
+        c.drawString(label_x, baseline - 3.5 * mm, value_text)
+        c.setStrokeColor(HexColor("#d9dfe5"))
+        c.setLineWidth(0.35)
+        separator_y = baseline - 6 * mm
+        c.line(label_x, separator_y, value_right, separator_y)
 
     _draw_barcode(c, worker, 7.3 * mm, W - 8 * mm, regular, bold)
 

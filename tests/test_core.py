@@ -58,7 +58,7 @@ def test_id_card_is_two_vertical_cr80_pages_and_has_expected_text(monkeypatch, t
     assert "Name" not in front and "CONTRACTOR" not in front
     assert "WORKER ID:" not in front and "ABB PLANT:" not in front
     assert w.worker_id in front and w.worker_no not in front
-    assert w.worker_no in back and w.worker_id in back and "02/01/2026" in back and "9876543211" in back
+    assert w.worker_no in back and w.worker_id in back and "02/01/2026" in back and "+91 98765 43211" in back
     assert "Aadhaar" not in front+back
 
 def test_card_handles_long_names_without_dropping_text(monkeypatch, tmp_path):
