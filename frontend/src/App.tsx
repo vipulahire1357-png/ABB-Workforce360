@@ -95,7 +95,7 @@ export default function App() {
       <main className="login-wrap">
         <form className="login" onSubmit={login}>
           <img src="/assets/abb-logo.svg" alt="ABB Logo" />
-          <h1>WIR — Worker ID & Registration</h1>
+          <h1>ABB Workforce360</h1>
           <p>Sign in with your authorized portal credentials.</p>
 
           <label>

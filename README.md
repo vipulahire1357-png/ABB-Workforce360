@@ -98,6 +98,43 @@ npm run dev -- --host 127.0.0.1
 
 Open the Vite URL shown in the terminal, normally `http://127.0.0.1:5173`, and sign in with the administrator account. The frontend proxies API requests to the backend on port 8000. Press `Ctrl+C` in both windows to stop the servers.
 
+## Open the app from another laptop on the same LAN
+
+The backend serves the built frontend and API from the same port. Build the frontend once if `frontend\dist` does not exist:
+
+```powershell
+Set-Location 'D:\ABB Security\frontend'
+npm run build
+Set-Location 'D:\ABB Security'
+```
+
+Start the backend so it listens on the network adapter:
+
+```powershell
+Set-Location 'D:\ABB Security'
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+Allow inbound TCP port 8000 on the Windows **Private** network profile if Windows Firewall blocks it. In an elevated PowerShell window, run this once:
+
+```powershell
+New-NetFirewallRule -DisplayName 'ABB Workforce360 LAN' -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
+```
+
+On the second laptop, connected to the same router/LAN, open `http://<server-LAN-IP>:8000` (for example, `http://192.168.0.102:8000`). A hotspot is not needed when both computers are already on the same network. Keep the server process running while the app is in use. The server's LAN address can change when DHCP renews; check `ipconfig` if the URL stops working. Do not expose this HTTP setup to the public internet.
+
+## Portable Windows launcher
+
+Double-click the root-level `run_app.bat`. On first use it downloads the latest `ABB_Workforce360_Portable_Windows.zip` asset from this repository's latest GitHub Release, extracts it to `portable_windows\ABB_Workforce360`, and starts the packaged application. Later runs use that local package without downloading again. An internet connection and a published Release with the asset are required the first time.
+
+The portable package includes its Python runtime, backend dependencies, and built React frontend; Python and Node.js do not need to be installed on the target laptop. Its console waits for the backend health check, opens the app in the default browser, and stays open. Close the browser and press Enter in the console to stop the backend gracefully. It binds port 8000 to the network interfaces and prints the server URL for other laptops on the same LAN. Allow inbound TCP 8000 on the Windows Private firewall profile if needed.
+
+The first launch creates `.env` with local signing, ID-generation, and encryption secrets. Create an administrator after the first launch has initialized this file by opening PowerShell in `portable_windows\ABB_Workforce360` and running `.\runtime\python.exe -m backend.create_admin`. Do not share `.env`. Worker, visitor, gate, and canteen data are stored under that portable folder's `data` directory; back up `data` and `.env` together. The release ZIP contains only empty runtime folders; it does not include a database, uploaded records, or `.env` secrets.
+
+### Publishing a portable Release
+
+Push the release source and tag, then create and publish a GitHub Release for that tag. The `Publish Workforce360 portable Windows release` workflow runs on the published event, builds the frontend, assembles and smoke-checks the Windows package, then attaches `ABB_Workforce360_Portable_Windows.zip` to that same Release. Enable GitHub Actions for the repository before the first Release. The workflow uses the repository's `GITHUB_TOKEN` with `contents: write`; no personal access token is needed. Do not start distributing `run_app.bat` until the workflow has completed and the ZIP asset appears on the Release.
+
 ## Production build and start
 
 Build the frontend from its directory:
