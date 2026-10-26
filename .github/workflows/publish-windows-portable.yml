@@ -10,7 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - name: Check out the release tag
         uses: actions/checkout@v4
@@ -36,6 +36,14 @@ jobs:
           python-version: '3.11'
           architecture: x64
 
+      - name: Install source smoke-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-test.txt
+
+      - name: Test reserved ports and project-scoped locks
+        run: python -m pytest tests/test_launcher_runtime.py
+
       - name: Assemble portable application
         shell: pwsh
         run: |
@@ -46,13 +54,17 @@ jobs:
 
           $backendSource = Join-Path $PWD 'backend'
           Get-ChildItem -LiteralPath $backendSource -File -Recurse |
-            Where-Object { $_.FullName -notmatch '[\\/](__pycache__|tests?)[\\/]' -and $_.Extension -ne '.pyc' } |
+            Where-Object {
+              $_.FullName -notmatch '[\\/](__pycache__|tests?)[\\/]' -and
+              $_.Extension -ne '.pyc' -and $_.Name -ne 'dev_server.py'
+            } |
             ForEach-Object {
               $relative = $_.FullName.Substring($backendSource.Length).TrimStart('\')
               $destination = Join-Path (Join-Path $package 'backend') $relative
               New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
               Copy-Item -LiteralPath $_.FullName -Destination $destination
             }
+
           $assetsPackage = Join-Path $package 'assets'
           New-Item -ItemType Directory -Force -Path $assetsPackage | Out-Null
           Copy-Item -LiteralPath (Join-Path $PWD 'assets\abb-logo.svg') -Destination (Join-Path $assetsPackage 'abb-logo.svg')
@@ -84,77 +96,60 @@ jobs:
           if (-not (Test-Path -LiteralPath $portablePython)) { throw 'The bundled Python executable is missing.' }
           Push-Location $package
           try {
-            & $portablePython -c 'import backend.main, fastapi, uvicorn, sqlalchemy, PIL, reportlab, cryptography, argon2; from svglib.svglib import svg2rlg; print("Portable application imports successfully")'
-            if ($LASTEXITCODE -ne 0) { throw 'The packaged Python runtime could not import required backend dependencies.' }
+            $env:PYTHONDONTWRITEBYTECODE = '1'
+            & $portablePython -c 'import backend.main, backend.launcher_runtime, fastapi, uvicorn, sqlalchemy, PIL, reportlab, cryptography, argon2; from svglib.svglib import svg2rlg; print("Portable application imports successfully")'
+            if ($LASTEXITCODE -ne 0) { throw 'The packaged Python runtime could not import the Workforce360 backend.' }
           }
-          finally { Pop-Location }
+          finally {
+            Remove-Item Env:PYTHONDONTWRITEBYTECODE -ErrorAction SilentlyContinue
+            Pop-Location
+          }
           if (-not (Test-Path -LiteralPath (Join-Path $package 'frontend\dist\index.html'))) { throw 'The production frontend build is missing.' }
 
-          New-Item -ItemType Directory -Force -Path (Join-Path $package 'data\uploads\workers'), (Join-Path $package 'data\uploads\visitors') | Out-Null
+          New-Item -ItemType Directory -Force -Path `
+            (Join-Path $package 'data\uploads\workers'), `
+            (Join-Path $package 'data\uploads\visitors'), `
+            (Join-Path $package 'data\run\portable') | Out-Null
           @'
-          ABB Workforce360 - Portable Windows Release
+          ABB Workforce360 - Portable Windows Build
 
-          1. Extract the complete ZIP into a writable local folder.
-          2. Double-click run_app.bat.
-          3. Keep the console open. Close the browser and press Enter in the console to stop the backend cleanly.
+          1. Extract the complete ZIP into a writable folder.
+          2. Double-click run_app.bat and keep its console open.
+          3. Close the browser and press Enter in the console to stop this instance gracefully.
 
-          This package includes its Python runtime, backend dependencies, and production React frontend. Python and Node.js do not need to be installed on the user computer.
-          The first launch creates local secrets in .env. Do not share that file. Create an administrator from this folder with:
+          The package includes its Python runtime, backend dependencies, and built React frontend. Python and Node.js are not needed on the user laptop.
+          The backend tries port 8000 first and holds its bound socket while starting. If that port is busy, it reserves an available port and prints the actual URL.
+          For other laptops on the same LAN, use the displayed address and allow inbound TCP for that port on Windows Firewall's Private profile if needed.
+          The first launch creates .env with signing, worker ID, and encryption secrets. Do not share .env. Create the first administrator with:
             runtime\python.exe -m backend.create_admin
-          SQLite records and uploaded images are stored under data\. Back up data\ and .env together before moving the portable folder. Neither is included in the release ZIP.
-          The launcher binds to the network interfaces on port 8000. For other laptops on the same LAN, use the URL printed in the console and allow inbound TCP 8000 on the Windows Private firewall profile if needed.
+          Worker and visitor data live under data\. Logs, runtime state, and the portable launch lock live under data\run\portable\. Back up data\ and .env together.
+          The release contains no database, uploaded user records, .env, source virtual environment, frontend node_modules, or development caches.
           '@ | Set-Content -LiteralPath (Join-Path $package 'PORTABLE_README.txt') -Encoding utf8
 
-          $archive = Join-Path $env:RUNNER_TEMP 'ABB_Workforce360_Portable_Windows.zip'
-          Compress-Archive -Path $package -DestinationPath $archive -CompressionLevel Optimal
-
-      - name: Smoke-check packaged health endpoint and frontend
+      - name: Run both project variants together
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $root = Join-Path $env:RUNNER_TEMP 'ABB_Workforce360'
-          $python = Join-Path $root 'runtime\python.exe'
-          $port = 18193
-          $healthUrl = "http://127.0.0.1:$port/api/health"
-          $pageUrl = "http://127.0.0.1:$port/"
-          $env:WIR_SESSION_SECRET = 'ci-session-secret-32-bytes-minimum-plus'
-          $env:WIR_CSRF_SECRET = 'ci-csrf-secret-32-bytes-minimum-plus'
-          $env:WIR_WORKER_ID_SECRET = 'ci-worker-id-secret-32-bytes-minimum-plus'
-          $env:WIR_AADHAAR_ENCRYPTION_KEY = 'MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA='
-          $env:WIR_ALLOWED_ORIGIN = $pageUrl.TrimEnd('/')
-          $stdout = Join-Path $env:RUNNER_TEMP 'workforce360-smoke.out.log'
-          $stderr = Join-Path $env:RUNNER_TEMP 'workforce360-smoke.error.log'
-          $process = $null
-          Push-Location $root
-          try {
-            $process = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', [string]$port, '--no-access-log') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            $ready = $false
-            for ($attempt = 0; $attempt -lt 40; $attempt++) {
-              $process.Refresh()
-              if ($process.HasExited) { break }
-              try {
-                $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2
-                if ($health.status -eq 'ok') { $ready = $true; break }
-              } catch { Start-Sleep -Milliseconds 500 }
-            }
-            if (-not $ready) {
-              Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue
-              throw 'Packaged Workforce360 /api/health did not return status=ok.'
-            }
-            $page = Invoke-WebRequest -UseBasicParsing -Uri $pageUrl -TimeoutSec 5
-            if ($page.StatusCode -ne 200 -or $page.Content -notmatch '<title>ABB Workforce360</title>') { throw 'Packaged Workforce360 main page failed its HTTP/title check.' }
-            Write-Host 'Packaged backend health and frontend page both returned successfully.'
-          }
-          finally {
-            if ($process) {
-              $process.Refresh()
-              if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue; $process.WaitForExit(10000) }
-            }
-            Pop-Location
-            Remove-Item Env:WIR_SESSION_SECRET, Env:WIR_CSRF_SECRET, Env:WIR_WORKER_ID_SECRET, Env:WIR_AADHAAR_ENCRYPTION_KEY, Env:WIR_ALLOWED_ORIGIN -ErrorAction SilentlyContinue
-          }
+          $package = Join-Path $env:RUNNER_TEMP 'ABB_Workforce360'
+          $devPython = (Get-Command python.exe).Source
+          $portablePython = Join-Path $package 'runtime\python.exe'
+          & $devPython tests/launcher_integration_smoke.py `
+            --source-root $PWD `
+            --portable-root $package `
+            --dev-python $devPython `
+            --portable-python $portablePython
+          if ($LASTEXITCODE -ne 0) { throw 'Development/portable simultaneous-launch smoke test failed.' }
 
-      - name: Attach the portable ZIP to this Release
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Join-Path $env:RUNNER_TEMP 'ABB_Workforce360'
+          $archive = Join-Path $env:RUNNER_TEMP 'ABB_Workforce360_Portable_Windows.zip'
+          if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+          Compress-Archive -Path $package -DestinationPath $archive -CompressionLevel Optimal
+
+      - name: Attach portable ZIP to this Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name }}

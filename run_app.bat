@@ -11,7 +11,9 @@ if not exist "%BOOTSTRAP%" (
   exit /b 1
 )
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BOOTSTRAP%"
+set "STOP_ARGUMENT="
+if /i "%~1"=="/stop" set "STOP_ARGUMENT=-Stop"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BOOTSTRAP%" %STOP_ARGUMENT%
 if errorlevel 1 (
   echo.
   echo Workforce360 could not be downloaded or started.

@@ -16,7 +16,9 @@ if not exist "%~dp0frontend\dist\index.html" (
   exit /b 1
 )
 
-"%PYTHON%" "%SUPERVISOR%"
+set "ACTION="
+if /i "%~1"=="/stop" set "ACTION=--stop"
+"%PYTHON%" "%SUPERVISOR%" %ACTION%
 set "APP_EXIT=%ERRORLEVEL%"
 if not "%APP_EXIT%"=="0" (
   echo.
