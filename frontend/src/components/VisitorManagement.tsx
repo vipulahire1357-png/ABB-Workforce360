@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   Upload,
   RotateCcw,
+  Camera,
   ChevronLeft,
   ChevronRight,
   X,
@@ -18,6 +19,8 @@ import {
 } from 'lucide-react';
 import { Visitor } from '../types';
 import { api, dateFmt, dateTimeFmt } from '../api';
+import { PhotoCapture } from './PhotoCapture';
+import { PhotoCrop } from './PhotoCrop';
 
 interface VisitorManagementProps {
   csrf: string;
@@ -40,7 +43,10 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
     aadhaar_no: '',
   });
   const [photoName, setPhotoName] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [createdVisitor, setCreatedVisitor] = useState<Visitor | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -83,6 +89,8 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
     setErr('');
     if (preview) URL.revokeObjectURL(preview);
     setPhotoName('');
+    setPhotoFile(null);
+    setCropFile(null);
     setPreview('');
     if (!f) return;
 
@@ -97,6 +105,7 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
       return;
     }
     setPhotoName(f.name);
+    setPhotoFile(f);
     setPreview(URL.createObjectURL(f));
   };
 
@@ -108,8 +117,8 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
 
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-    if (fileRef.current?.files?.[0]) {
-      fd.append('photo', fileRef.current.files[0]);
+    if (photoFile) {
+      fd.append('photo', photoFile);
     }
 
     try {
@@ -149,6 +158,8 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
       aadhaar_no: '',
     });
     if (fileRef.current) fileRef.current.value = '';
+    setPhotoFile(null);
+    setCropFile(null);
     if (preview) URL.revokeObjectURL(preview);
     setPreview('');
     setPhotoName('');
@@ -305,16 +316,27 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
 
             <div className="formsection">
               <h2>Visitor Photo (Optional)</h2>
-              <p>JPG or JPEG only; maximum 200 KB. Pass will display outline placeholder if omitted.</p>
+              <p>Select any browser-supported photo. It will be cropped and compressed below 200 KB. A photo is optional.</p>
               <div className="uploadrow">
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/jpeg,.jpg,.jpeg"
-                  onChange={(e) => handlePhotoChange(e.target.files?.[0])}
+                  accept="image/*"
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0];
+                    if (selected) setCropFile(selected);
+                    e.currentTarget.value = '';
+                  }}
                 />
                 {preview && <img className="preview" src={preview} alt="Visitor Preview" />}
                 <span>{photoName || 'No photo chosen (optional)'}</span>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setCameraOpen(true)}
+              >
+                <Camera size={15} /> Take photo
+              </button>
                 <button
                   type="button"
                   className="secondary"
@@ -544,6 +566,25 @@ export const VisitorManagement: React.FC<VisitorManagementProps> = ({ csrf }) =>
             </button>
           </section>
         </div>
+      )}
+      {cameraOpen && (
+        <PhotoCapture
+          subject="visitor"
+          onCapture={(file) => {
+            if (fileRef.current) fileRef.current.value = '';
+            handlePhotoChange(file);
+            setCameraOpen(false);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+      {cropFile && (
+        <PhotoCrop
+          file={cropFile}
+          subject="visitor"
+          onApply={(file) => { handlePhotoChange(file); setCropFile(null); }}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   );

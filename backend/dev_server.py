@@ -246,6 +246,7 @@ def run_development(no_browser: bool = False) -> int:
             frontend_port = int(frontend_state["frontend_port"])
             frontend_local_url = str(frontend_state["frontend_url"])
             application_url = f"http://{public_host}:{frontend_port}"
+            browser_url = frontend_local_url
             state.update(
                 {
                     "frontend_port": frontend_port,
@@ -259,15 +260,16 @@ def run_development(no_browser: bool = False) -> int:
 
             print(f"Development API: {backend_url} (LAN port {backend_port})", flush=True)
             print(f"Development frontend: {application_url}", flush=True)
+            print(f"Local browser URL: {browser_url} (camera capture is available on this laptop)", flush=True)
             print("This development instance has its own runtime state, lock and data root.", flush=True)
             if not no_browser:
                 import webbrowser
 
                 try:
-                    if not webbrowser.open(application_url, new=2):
-                        print(f"Could not open the browser automatically. Open {application_url} manually.", flush=True)
+                    if not webbrowser.open(browser_url, new=2):
+                        print(f"Could not open the browser automatically. Open {browser_url} manually.", flush=True)
                 except Exception as exc:
-                    print(f"Could not open the browser automatically ({exc}). Open {application_url} manually.", flush=True)
+                    print(f"Could not open the browser automatically ({exc}). Open {browser_url} manually.", flush=True)
             wait_for_console_or_signal(signal_path, state, logger)
             return 0
         finally:

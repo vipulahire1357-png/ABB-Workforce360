@@ -3,6 +3,7 @@ import {
   UserPlus,
   Download,
   RotateCcw,
+  Camera,
   Upload,
   LoaderCircle,
   CheckCircle2,
@@ -11,6 +12,8 @@ import {
 } from 'lucide-react';
 import { Worker } from '../types';
 import { api } from '../api';
+import { PhotoCapture } from './PhotoCapture';
+import { PhotoCrop } from './PhotoCrop';
 
 interface WorkerRegistrationProps {
   csrf: string;
@@ -26,7 +29,10 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
     aadhaar_no: '',
   });
   const [photo, setPhoto] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const [result, setResult] = useState<Worker | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -37,6 +43,8 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
     setErr('');
     if (preview) URL.revokeObjectURL(preview);
     setPhoto('');
+    setPhotoFile(null);
+    setCropFile(null);
     setPreview('');
     if (!f) return;
     if (!['image/jpeg', 'image/jpg'].includes(f.type) || !/\.jpe?g$/i.test(f.name)) {
@@ -50,12 +58,13 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
       return;
     }
     setPhoto(f.name);
+    setPhotoFile(f);
     setPreview(URL.createObjectURL(f));
   };
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!fileRef.current?.files?.[0]) {
+    if (!photoFile) {
       setErr('Choose a passport-size photo');
       return;
     }
@@ -65,7 +74,7 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
 
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-    fd.append('photo', fileRef.current.files[0]);
+    fd.append('photo', photoFile);
 
     try {
       const v = await (await api('/workers', { method: 'POST', body: fd }, csrf)).json();
@@ -88,6 +97,8 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
       aadhaar_no: '',
     });
     if (fileRef.current) fileRef.current.value = '';
+    setPhotoFile(null);
+    setCropFile(null);
     if (preview) URL.revokeObjectURL(preview);
     setPreview('');
     setPhoto('');
@@ -224,16 +235,27 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
 
           <div className="formsection">
             <h2>Passport-size photo</h2>
-            <p>JPG or JPEG only; maximum 200 KB.</p>
+            <p>Select any browser-supported photo. It will be cropped to the ID-card frame and compressed below 200 KB.</p>
             <div className="uploadrow">
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/jpeg,.jpg,.jpeg"
-                onChange={(e) => fileChange(e.target.files?.[0])}
+                accept="image/*"
+                onChange={(e) => {
+                  const selected = e.target.files?.[0];
+                  if (selected) setCropFile(selected);
+                  e.currentTarget.value = '';
+                }}
               />
               {preview && <img className="preview" src={preview} alt="Worker Preview" />}
               <span>{photo || 'No photo selected'}</span>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setCameraOpen(true)}
+              >
+                <Camera size={15} /> Take photo
+              </button>
               <button
                 type="button"
                 className="secondary"
@@ -255,6 +277,25 @@ export const WorkerRegistration: React.FC<WorkerRegistrationProps> = ({ csrf }) 
             </button>
           </div>
         </form>
+      )}
+      {cameraOpen && (
+        <PhotoCapture
+          subject="worker"
+          onCapture={(file) => {
+            if (fileRef.current) fileRef.current.value = '';
+            fileChange(file);
+            setCameraOpen(false);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+      {cropFile && (
+        <PhotoCrop
+          file={cropFile}
+          subject="worker"
+          onApply={(file) => { fileChange(file); setCropFile(null); }}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   );

@@ -97,7 +97,7 @@ If Windows Firewall blocks access, allow inbound TCP on the port shown in the pr
 New-NetFirewallRule -DisplayName 'ABB Workforce360 LAN' -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
 ```
 
-Keep the server launcher running while the app is in use. The server's LAN address can change when DHCP renews; check `ipconfig` if the URL stops working. Do not expose the development server directly to the public internet.
+The server laptop's browser opens on the loopback address (`127.0.0.1`) so browser camera permissions work locally. Browsers block camera access on plain HTTP LAN addresses; if workers or visitors will be photographed from another laptop, serve the app over HTTPS on that network. Photo upload remains available over HTTP. Keep the server launcher running while the app is in use. The server's LAN address can change when DHCP renews; check `ipconfig` if the URL stops working. Do not expose the development server directly to the public internet.
 
 ## Portable Windows launcher
 

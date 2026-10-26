@@ -514,3 +514,118 @@
   animation: spin 3s linear infinite;
 }
 
+.camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #101820bf;
+}
+.camera-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 60px #0005;
+}
+.camera-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.camera-header h2 { font-size: 17px; margin: 0 0 4px; }
+.camera-header p { color: #74808b; font-size: 12px; margin: 0; }
+.camera-close { border: 0; background: transparent; color: #65717d; padding: 3px; }
+.camera-select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #364250;
+  font-size: 11px;
+  font-weight: 600;
+}
+.camera-select-label select {
+  height: 36px;
+  padding: 0 9px;
+  border: 1px solid #cfd5dc;
+  border-radius: 4px;
+  background: #fff;
+}
+.camera-view {
+  position: relative;
+  aspect-ratio: 8 / 9;
+  max-height: 58vh;
+  margin: auto;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #101820;
+}
+.camera-view video { width: 100%; height: 100%; object-fit: cover; }
+.camera-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #fff;
+  background: #10182099;
+  font-size: 12px;
+}
+.camera-error {
+  margin: 12px 0 0;
+  padding: 9px 10px;
+  border-left: 3px solid #e60000;
+  color: #a10000;
+  background: #fff2f2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.camera-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 16px; }
+@media (max-width: 560px) {
+  .camera-overlay { padding: 10px; }
+  .camera-dialog { max-height: calc(100vh - 20px); padding: 15px; }
+  .camera-view { max-height: 52vh; }
+}
+
+.crop-dialog { width: min(430px, 100%); }
+.photo-crop-frame {
+  position: relative;
+  width: min(100%, 288px);
+  aspect-ratio: 8 / 9;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #202833;
+  border-radius: 4px;
+  background: #101820;
+  cursor: grab;
+  touch-action: none;
+}
+.photo-crop-frame:active { cursor: grabbing; }
+.photo-crop-frame img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  pointer-events: none;
+  transform-origin: center;
+}
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: #364250;
+  font-size: 12px;
+}
+.crop-zoom input { flex: 1; accent-color: #e60000; }
+

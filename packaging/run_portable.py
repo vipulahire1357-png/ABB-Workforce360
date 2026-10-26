@@ -114,6 +114,7 @@ def run_portable(no_browser: bool = False) -> int:
             backend_url = f"http://127.0.0.1:{backend_port}"
             public_host = lan_ipv4_address()
             application_url = f"http://{public_host}:{backend_port}"
+            local_application_url = f"http://127.0.0.1:{backend_port}"
             state: dict[str, Any] = {
                 "mode": "portable",
                 "project_root": str(ROOT),
@@ -167,17 +168,17 @@ def run_portable(no_browser: bool = False) -> int:
             else:
                 raise RuntimeError("The backend and built frontend did not become ready within 40 seconds.")
 
-            print(f"Portable Workforce360 API and frontend are ready at {application_url}", flush=True)
+            print(f"Portable Workforce360 API and frontend are ready locally at {local_application_url}", flush=True)
             if backend_port != PREFERRED_BACKEND_PORT:
                 print(f"Preferred port {PREFERRED_BACKEND_PORT} was occupied; using port {backend_port}.", flush=True)
             if not no_browser:
                 try:
-                    if not webbrowser.open(application_url, new=2):
-                        print(f"Could not open the default browser. Open {application_url} manually.", flush=True)
+                    if not webbrowser.open(local_application_url, new=2):
+                        print(f"Could not open the default browser. Open {local_application_url} manually.", flush=True)
                 except Exception as exc:
-                    print(f"Could not open the default browser ({exc}). Open {application_url} manually.", flush=True)
+                    print(f"Could not open the default browser ({exc}). Open {local_application_url} manually.", flush=True)
             if public_host != "127.0.0.1":
-                print(f"Other laptops on the LAN can use {application_url} if TCP {backend_port} is allowed by Windows Firewall.", flush=True)
+                print(f"Other laptops on the LAN can use {application_url} if TCP {backend_port} is allowed by Windows Firewall. Browser camera access on those laptops requires HTTPS.", flush=True)
             write_json_atomic(state_path, state)
             wait_for_console_or_signal(signal_path, state, logger)
             return 0
