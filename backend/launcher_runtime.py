@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -181,7 +182,8 @@ def wait_for_console_or_signal(signal_path: Path, state: dict[str, Any], logger:
         except (EOFError, OSError):
             stopped.set()
 
-    threading.Thread(target=wait_for_enter, name="launcher-console-input", daemon=True).start()
+    if sys.stdin is not None and sys.stdin.isatty():
+        threading.Thread(target=wait_for_enter, name="launcher-console-input", daemon=True).start()
     while not stopped.wait(0.15):
         if stop_was_requested(signal_path, state):
             logger.info("Received this project's explicit stop request.")
