@@ -101,7 +101,14 @@ Keep the server launcher running while the app is in use. The server's LAN addre
 
 ## Portable Windows launcher
 
-Double-click the root-level `run_app.bat`. On first use it downloads the latest `ABB_Workforce360_Portable_Windows.zip` asset from this repository's latest GitHub Release, extracts it to `portable_windows\ABB_Workforce360`, and starts the packaged application. Later runs use that local package without downloading again. An internet connection and a published Release with the asset are required the first time. Development and portable mode use separate code folders, runtime files, logs, locks, processes, dependencies, and data folders.
+This GitHub repository is private, so the first download needs [GitHub CLI](https://cli.github.com/) and an account with repository access. Install GitHub CLI if needed, then authenticate once:
+
+```powershell
+gh auth login --hostname github.com --web
+gh auth status
+```
+
+Double-click the root-level `run_app.bat`. On first use it uses GitHub CLI to download the latest `ABB_Workforce360_Portable_Windows.zip` asset, extracts it to `portable_windows\ABB_Workforce360`, and starts the packaged application. Later runs use that local package without downloading again. An internet connection, GitHub CLI authentication, and a published Release with the asset are required the first time. Development and portable mode use separate code folders, runtime files, logs, locks, processes, dependencies, and data folders.
 
 The portable package includes its own Python runtime, backend dependencies, and built React frontend; Python and Node.js do not need to be installed on the target laptop. Its console verifies API and page readiness, opens the app in the default browser, and stays open. It tries backend port 8000 first and dynamically binds an available port if needed. Close the browser and press Enter in its console, or run `run_app.bat /stop` from the project root, to stop only the portable instance. The launcher prints the actual URL for other laptops on the same LAN; allow that TCP port on the Windows Private firewall profile if needed. Production frontend/API calls use the same origin.
 

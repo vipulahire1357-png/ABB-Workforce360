@@ -6,8 +6,8 @@ $portableRoot = Join-Path $repositoryRoot 'portable_windows'
 $packageName = 'ABB_Workforce360'
 $portablePackage = Join-Path $portableRoot $packageName
 $portableLauncher = Join-Path $portablePackage 'run_app.bat'
+$repository = 'vipulahire1357-png/ABB-Workforce360'
 $assetName = 'ABB_Workforce360_Portable_Windows.zip'
-$downloadUrl = "https://github.com/vipulahire1357-png/ABB-Workforce360/releases/latest/download/$assetName"
 
 if ($Stop) {
     if (-not (Test-Path -LiteralPath $portableLauncher)) {
@@ -36,8 +36,20 @@ if (-not (Test-Path -LiteralPath $portableLauncher)) {
     $archivePath = Join-Path $env:TEMP "${packageName}_$temporaryId.zip"
     $stagingPath = Join-Path $portableRoot ".${packageName}_$temporaryId"
     try {
+        $githubCli = Get-Command gh.exe -ErrorAction SilentlyContinue
+        if (-not $githubCli) {
+            throw "This repository is private, so the release asset cannot be downloaded anonymously. Install GitHub CLI, run 'gh auth login --hostname github.com --web' with an account that can access $repository, then run this launcher again."
+        }
+        & $githubCli.Source auth status --hostname github.com *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "GitHub CLI is not authenticated. Run 'gh auth login --hostname github.com --web' with an account that can access $repository, then run this launcher again."
+        }
+
         Write-Host 'Downloading the Workforce360 portable runtime from the latest GitHub Release...'
-        Invoke-WebRequest -UseBasicParsing -Uri $downloadUrl -OutFile $archivePath -TimeoutSec 180
+        & $githubCli.Source release download --repo $repository --pattern $assetName --output $archivePath
+        if ($LASTEXITCODE -ne 0) {
+            throw "GitHub CLI could not download '$assetName'. Check that your authenticated account has access to $repository and that the latest Release contains this asset."
+        }
         if (-not (Test-Path -LiteralPath $archivePath) -or (Get-Item -LiteralPath $archivePath).Length -lt 1024) {
             throw "The GitHub Release download was empty or incomplete. Confirm that the latest Release has the '$assetName' asset."
         }
