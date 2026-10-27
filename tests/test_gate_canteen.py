@@ -125,12 +125,16 @@ def test_gate_and_canteen_workflow(app_client):
     gate_csrf = _login(app_client, "gate_user", "gate-password-14ch")
 
     # 2. Gate Scan 1: ENTRY
-    scan1 = app_client.post("/api/gate/scan", headers={"X-WIR-CSRF": gate_csrf}, json={"barcode": worker_id})
+    # Scanner firmware may emit lowercase; identity lookup should be case-insensitive.
+    scan1 = app_client.post("/api/gate/scan", headers={"X-WIR-CSRF": gate_csrf}, json={"barcode": worker_id.lower()})
     assert scan1.status_code == 200
     d1 = scan1.json()
     assert d1["accepted"] is True
     assert d1["event_type"] == "ENTRY"
     assert d1["person"]["name"] == "Rahul Sharma"
+    with dbmod.SessionLocal() as session:
+        first_gate_txn = session.query(GateTransaction).filter_by(person_id=worker_id).first()
+        assert first_gate_txn.barcode_scanned == worker_id
 
     # 3. Gate Scan 2: Immediate re-scan should trigger cooldown (< 10 minutes)
     scan2 = app_client.post("/api/gate/scan", headers={"X-WIR-CSRF": gate_csrf}, json={"barcode": worker_id})
@@ -246,3 +250,98 @@ def test_canteen_rejection_for_no_gate_entry(app_client):
     cd = cscan.json()
     assert cd["accepted"] is False
     assert cd["reason"] == "NO_GATE_ENTRY"
+
+
+def test_visitor_can_receive_one_meal_after_gate_entry(app_client):
+    gate_csrf = _login(app_client, "gate_user", "gate-password-14ch")
+    reg = app_client.post(
+        "/api/visitors",
+        headers={"X-WIR-CSRF": gate_csrf},
+        data={
+            "name": "Test Visitor", "company_name": "Test Company",
+            "location": "Plant 3", "host": "Test Host", "purpose": "Testing",
+            "contact_no": "9123456789", "aadhaar_no": "987654321012",
+        },
+    )
+    assert reg.status_code == 201, reg.text
+    visitor_id = reg.json()["visitor_id"]
+
+    entry = app_client.post(
+        "/api/gate/scan", headers={"X-WIR-CSRF": gate_csrf},
+        json={"barcode": visitor_id.lower()},
+    )
+    assert entry.status_code == 200
+    assert entry.json()["accepted"] is True
+    assert entry.json()["person"]["person_type"] == "VISITOR"
+
+    canteen_csrf = _login(app_client, "canteen_user", "canteen-pass-14ch")
+    meal = app_client.post(
+        "/api/canteen/scan", headers={"X-WIR-CSRF": canteen_csrf},
+        json={"barcode": visitor_id.lower()},
+    )
+    assert meal.status_code == 200
+    assert meal.json()["accepted"] is True
+    assert meal.json()["person"]["person_type"] == "VISITOR"
+    assert meal.json()["person"]["visitor_no"] == "ABB-P3-V-1"
+
+    duplicate = app_client.post(
+        "/api/canteen/scan", headers={"X-WIR-CSRF": canteen_csrf},
+        json={"barcode": visitor_id},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["accepted"] is False
+    assert duplicate.json()["reason"] == "ALREADY_SCANNED"
+
+    report = app_client.get("/api/canteen/report")
+    assert report.status_code == 200
+    assert report.json()["unique_visitors"] == 1
+    assert report.json()["unique_people"] == 1
+
+    history = app_client.get(f"/api/canteen/transactions?person_id={visitor_id}")
+    assert history.status_code == 200
+    assert all(item["person_type"] == "VISITOR" for item in history.json()["items"])
+
+
+def test_visitor_canteen_scan_requires_current_eligibility(app_client):
+    gate_csrf = _login(app_client, "gate_user", "gate-password-14ch")
+    reg = app_client.post(
+        "/api/visitors", headers={"X-WIR-CSRF": gate_csrf},
+        data={
+            "name": "Test Visitor", "company_name": "Test Company",
+            "location": "Plant 3", "host": "Test Host", "purpose": "Testing",
+            "contact_no": "9123456789", "aadhaar_no": "987654321012",
+        },
+    )
+    assert reg.status_code == 201, reg.text
+    visitor_id = reg.json()["visitor_id"]
+    canteen_csrf = _login(app_client, "canteen_user", "canteen-pass-14ch")
+
+    no_entry = app_client.post(
+        "/api/canteen/scan", headers={"X-WIR-CSRF": canteen_csrf},
+        json={"barcode": visitor_id},
+    )
+    assert no_entry.json()["reason"] == "NO_GATE_ENTRY"
+
+    with dbmod.SessionLocal() as session:
+        visitor = session.query(Visitor).filter_by(visitor_id=visitor_id).one()
+        visitor.status = "Inactive"
+        session.commit()
+    inactive = app_client.post(
+        "/api/canteen/scan", headers={"X-WIR-CSRF": canteen_csrf},
+        json={"barcode": visitor_id},
+    )
+    assert inactive.json()["reason"] == "VISITOR_NOT_ELIGIBLE"
+
+    with dbmod.SessionLocal() as session:
+        visitor = session.query(Visitor).filter_by(visitor_id=visitor_id).one()
+        visitor.status = "Active"
+        visitor.expiration_timestamp = now_local() - timedelta(seconds=1)
+        session.commit()
+    expired = app_client.post(
+        "/api/canteen/scan", headers={"X-WIR-CSRF": canteen_csrf},
+        json={"barcode": visitor_id},
+    )
+    assert expired.json()["reason"] == "VISITOR_NOT_ELIGIBLE"
+    with dbmod.SessionLocal() as session:
+        visitor = session.query(Visitor).filter_by(visitor_id=visitor_id).one()
+        assert visitor.status == "Inactive"

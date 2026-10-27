@@ -112,7 +112,7 @@ def _state_machine(db, person_id, person_type, person, barcode,
 
 def process_scan(db: Session, barcode: str, operator_id: int | None) -> ScanResult:
     """Process a gate barcode scan: resolve person, validate, and apply state machine."""
-    barcode = barcode.strip()
+    barcode = barcode.strip().upper()
     if not barcode:
         return ScanResult(False, None, "INVALID_ID")
 

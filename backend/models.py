@@ -88,7 +88,9 @@ class CanteenTransaction(Base):
         Index("ix_canteen_business_date", "business_date"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Legacy column name retained for existing SQLite databases; it stores either a worker or visitor ID.
     worker_id: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    person_type: Mapped[str] = mapped_column(String(10), nullable=False, default="WORKER")
     business_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     scan_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     gate_entry_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("gate_transactions.id"), nullable=True)

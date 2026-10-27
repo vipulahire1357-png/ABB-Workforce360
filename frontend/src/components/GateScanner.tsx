@@ -32,6 +32,7 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
   const scannerActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerKeyTimes = useRef<number[]>([]);
+  const lastSubmittedScan = useRef<{ code: string; at: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const markScannerActive = () => {
@@ -41,9 +42,13 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
   };
 
   const submitScannedBarcode = (code: string) => {
-    if (!code || busy) return;
+    const normalizedCode = code.trim();
+    const now = Date.now();
+    if (!normalizedCode || busy) return;
+    if (lastSubmittedScan.current?.code === normalizedCode && now - lastSubmittedScan.current.at < 1000) return;
+    lastSubmittedScan.current = { code: normalizedCode, at: now };
     markScannerActive();
-    void processScan(code);
+    void processScan(normalizedCode);
   };
 
   const trackScannerInput = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -51,9 +56,7 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       if (scannerCompleteTimer.current) clearTimeout(scannerCompleteTimer.current);
-      const recentKeys = scannerKeyTimes.current.filter((time) => now - time < 1500);
-      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500)
-        submitScannedBarcode(event.currentTarget.value.trim());
+      submitScannedBarcode(event.currentTarget.value.trim());
       scannerKeyTimes.current = [];
       return;
     }

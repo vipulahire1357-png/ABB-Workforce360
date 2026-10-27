@@ -73,11 +73,13 @@ export interface CanteenScanResult {
   accepted: boolean;
   reason: string;
   person?: {
+    person_type: 'WORKER' | 'VISITOR';
     person_id: string;
     name: string;
-    worker_no: string;
+    worker_no?: string;
+    visitor_no?: string;
     detail: string;
-    photo_url: string;
+    photo_url?: string | null;
   } | null;
   gate_entry_time?: string | null;
   transaction_id?: number | null;
@@ -85,6 +87,8 @@ export interface CanteenScanResult {
 
 export interface CanteenTransaction {
   id: number;
+  person_id: string;
+  person_type: 'WORKER' | 'VISITOR' | 'UNKNOWN';
   worker_id: string;
   business_date: string;
   scan_timestamp: string;
@@ -99,6 +103,8 @@ export interface CanteenReport {
   total_scans: number;
   successful_scans: number;
   unique_workers: number;
+  unique_people?: number;
+  unique_visitors?: number;
   rejected_scans: number;
   duplicate_attempts: number;
   no_gate_entry: number;

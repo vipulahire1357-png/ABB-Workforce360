@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { GateTransaction } from '../types';
-import { api, dateFmt, timeFmt } from '../api';
+import { api, dateFmt, localDateInput, timeFmt } from '../api';
 
 interface GateHistoryProps {
   csrf: string;
@@ -21,7 +21,7 @@ export const GateHistory: React.FC<GateHistoryProps> = ({ csrf }) => {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [dateVal, setDateVal] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateVal, setDateVal] = useState<string>(localDateInput());
   const [personType, setPersonType] = useState<string>('');
   const [resultFilter, setResultFilter] = useState<string>('');
 

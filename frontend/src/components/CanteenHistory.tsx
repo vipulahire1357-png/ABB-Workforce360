@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { CanteenTransaction, CanteenReport } from '../types';
-import { api, dateFmt, timeFmt } from '../api';
+import { api, dateFmt, localDateInput, timeFmt } from '../api';
 
 interface CanteenHistoryProps {
   csrf: string;
@@ -22,7 +22,7 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [dateVal, setDateVal] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [dateVal, setDateVal] = useState<string>(localDateInput());
   const [workerId, setWorkerId] = useState<string>('');
   const [resultFilter, setResultFilter] = useState<string>('');
 
@@ -33,7 +33,7 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
       q.set('page', page.toString());
       q.set('page_size', '25');
       if (dateVal) q.set('business_date', dateVal);
-      if (workerId) q.set('worker_id', workerId.trim());
+      if (workerId) q.set('person_id', workerId.trim());
       if (resultFilter) q.set('result', resultFilter);
 
       const res = await api(`/canteen/transactions?${q.toString()}`, {}, csrf);
@@ -113,7 +113,7 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
             <input
               type="text"
               className="text-filter"
-              placeholder="Filter by Worker ID..."
+              placeholder="Filter by Worker or Visitor ID..."
               value={workerId}
               onChange={(e) => setWorkerId(e.target.value)}
               onKeyDown={(e) => {
@@ -148,7 +148,8 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
                 <th>ID</th>
                 <th>Time</th>
                 <th>Date</th>
-                <th>Worker ID</th>
+                <th>Person Type</th>
+                <th>Person ID</th>
                 <th>Gate Entry Ref</th>
                 <th>Scan Result</th>
                 <th>Rejection Reason</th>
@@ -157,13 +158,13 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="empty">
+                  <td colSpan={8} className="empty">
                     <LoaderCircle className="spin" size={16} /> Loading canteen records...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="empty">
+                  <td colSpan={8} className="empty">
                     No canteen transactions found for the selected date/filter.
                   </td>
                 </tr>
@@ -173,7 +174,8 @@ export const CanteenHistory: React.FC<CanteenHistoryProps> = ({ csrf }) => {
                     <td className="mono">#{tx.id}</td>
                     <td>{timeFmt(tx.scan_timestamp)}</td>
                     <td>{dateFmt(tx.business_date)}</td>
-                    <td className="mono strong">{tx.worker_id}</td>
+                    <td>{tx.person_type ?? 'WORKER'}</td>
+                    <td className="mono strong">{tx.person_id ?? tx.worker_id}</td>
                     <td className="mono">
                       {tx.gate_entry_id ? `#${tx.gate_entry_id}` : '—'}
                     </td>

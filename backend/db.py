@@ -23,6 +23,16 @@ def init_db():
             if cols and "role" not in cols:
                 conn.exec_driver_sql("ALTER TABLE admins ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'ADMIN'")
                 conn.commit()
+            canteen_cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(canteen_transactions)").fetchall()]
+            if canteen_cols:
+                if "person_type" not in canteen_cols:
+                    conn.exec_driver_sql("ALTER TABLE canteen_transactions ADD COLUMN person_type VARCHAR(10) NOT NULL DEFAULT 'WORKER'")
+                conn.exec_driver_sql(
+                    "UPDATE canteen_transactions SET person_type = 'VISITOR' "
+                    "WHERE person_type != 'VISITOR' "
+                    "AND worker_id IN (SELECT visitor_id FROM visitors)"
+                )
+                conn.commit()
 
 def get_db():
     db = SessionLocal()

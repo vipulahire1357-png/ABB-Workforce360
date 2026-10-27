@@ -41,6 +41,7 @@ def transactions(
     page_size: int = 25,
     business_date: date | None = None,
     worker_id: str | None = None,
+    person_id: str | None = None,
     result_filter: str | None = Query(None, alias="result"),
     db: Session = Depends(get_db),
     admin: Admin = Depends(require_role("CANTEEN", "ADMIN")),
@@ -52,8 +53,9 @@ def transactions(
     stmt = select(CanteenTransaction)
     if business_date:
         stmt = stmt.where(CanteenTransaction.business_date == business_date)
-    if worker_id:
-        stmt = stmt.where(CanteenTransaction.worker_id == worker_id)
+    identity_filter = person_id or worker_id
+    if identity_filter:
+        stmt = stmt.where(CanteenTransaction.worker_id == identity_filter.strip().upper())
     if result_filter:
         stmt = stmt.where(CanteenTransaction.scan_result == result_filter.upper())
 
@@ -94,7 +96,9 @@ def daily_report(
         "date": target.isoformat(),
         "total_scans": len(rows),
         "successful_scans": len(accepted),
-        "unique_workers": len(set(r.worker_id for r in accepted)),
+        "unique_people": len(set(r.worker_id for r in accepted)),
+        "unique_workers": len(set(r.worker_id for r in accepted if r.person_type == "WORKER")),
+        "unique_visitors": len(set(r.worker_id for r in accepted if r.person_type == "VISITOR")),
         "rejected_scans": len(rejected),
         "duplicate_attempts": len(duplicates),
         "no_gate_entry": len(no_entry),
@@ -105,6 +109,8 @@ def daily_report(
 def _serialize_txn(t: CanteenTransaction) -> dict:
     return {
         "id": t.id,
+        "person_id": t.worker_id,
+        "person_type": t.person_type,
         "worker_id": t.worker_id,
         "business_date": t.business_date.isoformat(),
         "scan_timestamp": t.scan_timestamp.isoformat() if t.scan_timestamp else None,

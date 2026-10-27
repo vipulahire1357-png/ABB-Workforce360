@@ -1,6 +1,6 @@
-# ABB Worker ID & Registration (WIR)
+# ABB Workforce360
 
-WIR is a standalone worker registration and identity-card application for ABB Plant 3. It includes worker registration, worker management, secure administrator sign-in, local photo storage, and two-sided CR80 PDF ID cards. It does not provide gate access, visitor management, attendance, or canteen features.
+Workforce360 manages worker registration, visitor registration, gate entry and exit, canteen meal scans, and identity cards for ABB Plant 3. It includes secure administrator sign-in, local photo storage, and two-sided CR80 PDF ID cards. Active workers and valid registered visitors with an accepted gate entry can receive one canteen meal per business day.
 
 ## Requirements
 
@@ -97,7 +97,7 @@ If Windows Firewall blocks access, allow inbound TCP on the port shown in the pr
 New-NetFirewallRule -DisplayName 'ABB Workforce360 LAN' -Direction Inbound -Protocol TCP -LocalPort 5173 -Action Allow -Profile Private
 ```
 
-The server laptop's browser opens on the loopback address (`127.0.0.1`) so browser camera permissions work locally. Browsers block camera access on plain HTTP LAN addresses; if workers or visitors will be photographed from another laptop, serve the app over HTTPS on that network. Photo upload remains available over HTTP. Keep the server launcher running while the app is in use. The server's LAN address can change when DHCP renews; check `ipconfig` if the URL stops working. Do not expose the development server directly to the public internet.
+The server laptop's browser opens on the loopback address (`127.0.0.1`) so browser camera permissions work locally. Browsers block camera access on plain HTTP LAN addresses; if workers or visitors will be photographed from another laptop, serve the app over HTTPS on that network and set `WIR_COOKIE_SECURE=true` in `.env`. Photo upload remains available over HTTP. Keep the server launcher running while the app is in use. The server's LAN address can change when DHCP renews; check `ipconfig` if the URL stops working. Do not expose the development server directly to the public internet.
 
 ## Portable Windows launcher
 
@@ -139,13 +139,14 @@ Do not use `--reload` for production. Do not expose the development server direc
 
 ## Tests
 
-Install the test-only barcode decoder and run the backend tests from the project directory, then run the frontend test:
+Install the test-only barcode decoder and run the backend tests from the project directory, then run the frontend tests:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
 .\.venv\Scripts\python.exe -m pytest -q
 Set-Location 'D:\ABB Workforce360\frontend'
 npm test
+npm run build
 ```
 
 ## Application and security notes

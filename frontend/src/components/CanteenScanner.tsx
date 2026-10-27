@@ -29,6 +29,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
   const scannerActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerKeyTimes = useRef<number[]>([]);
+  const lastSubmittedScan = useRef<{ code: string; at: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const markScannerActive = () => {
@@ -38,9 +39,13 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
   };
 
   const submitScannedBarcode = (code: string) => {
-    if (!code || busy) return;
+    const normalizedCode = code.trim();
+    const now = Date.now();
+    if (!normalizedCode || busy) return;
+    if (lastSubmittedScan.current?.code === normalizedCode && now - lastSubmittedScan.current.at < 1000) return;
+    lastSubmittedScan.current = { code: normalizedCode, at: now };
     markScannerActive();
-    void processScan(code);
+    void processScan(normalizedCode);
   };
 
   const trackScannerInput = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -48,9 +53,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       if (scannerCompleteTimer.current) clearTimeout(scannerCompleteTimer.current);
-      const recentKeys = scannerKeyTimes.current.filter((time) => now - time < 1500);
-      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500)
-        submitScannedBarcode(event.currentTarget.value.trim());
+      submitScannedBarcode(event.currentTarget.value.trim());
       scannerKeyTimes.current = [];
       return;
     }
@@ -154,7 +157,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
         <div>
           <div className="eyebrow">ABB PLANT 3 · CANTEEN SERVICES</div>
           <h1>Canteen Scan Management (CSM)</h1>
-          <p>Meal eligibility verification: Gate entry validation and single daily meal policy.</p>
+          <p>Meal eligibility for workers and visitors with a valid gate entry; one meal per day.</p>
         </div>
         <div className="head-actions">
           <button
@@ -176,8 +179,8 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
           <b>{report?.successful_scans ?? '—'}</b>
         </div>
         <div>
-          <span>Unique Workers</span>
-          <b>{report?.unique_workers ?? '—'}</b>
+          <span>Unique People</span>
+          <b>{report?.unique_people ?? '—'}</b>
         </div>
         <div className="stat-orange">
           <span>Duplicates Prevented</span>
@@ -199,7 +202,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                 ref={inputRef}
                 type="text"
                 className="scan-input"
-                placeholder="Scan Worker ID barcode (WIR-...)"
+                placeholder="Scan worker or visitor ID (WIR-... / VIS-...)"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
                 onKeyDown={trackScannerInput}
@@ -247,13 +250,15 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                         <h2>MEAL SCAN REJECTED</h2>
                         <span>
                           {result.reason === 'NO_GATE_ENTRY'
-                            ? 'No Gate Entry Today — Worker must check in at security gate first'
+                            ? 'No Gate Entry Today — Person must check in at security gate first'
                             : result.reason === 'ALREADY_SCANNED'
-                            ? 'Already Scanned Today — 1 meal per worker policy'
+                            ? 'Already Scanned Today — 1 meal per person policy'
                             : result.reason === 'WORKER_NOT_ELIGIBLE'
-                            ? 'Worker Account is Inactive'
-                            : result.reason === 'WORKER_NOT_FOUND'
-                            ? 'Worker ID Not Found on Record'
+                            ? 'Worker account is inactive'
+                            : result.reason === 'VISITOR_NOT_ELIGIBLE'
+                            ? 'Visitor pass is inactive or expired'
+                            : result.reason === 'PERSON_NOT_FOUND'
+                            ? 'Worker or visitor ID not found on record'
                             : 'Scan Rejected'}
                         </span>
                       </div>
@@ -272,7 +277,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                 </div>
               )}
 
-              {/* Worker Profile */}
+              {/* Worker or visitor profile */}
               {result.person && (
                 <div className="result-person">
                   {result.person.photo_url ? (
@@ -297,8 +302,8 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                       <span>{result.person.detail}</span>
                     </div>
                     <div className="person-meta">
-                      <span>Worker No: <b>{result.person.worker_no}</b></span>
-                      <span>Worker ID: <b>{result.person.person_id}</b></span>
+                      <span>{result.person.person_type === 'VISITOR' ? 'Visitor No' : 'Worker No'}: <b>{result.person.visitor_no ?? result.person.worker_no}</b></span>
+                      <span>{result.person.person_type === 'VISITOR' ? 'Visitor ID' : 'Worker ID'}: <b>{result.person.person_id}</b></span>
                     </div>
                   </div>
                 </div>
@@ -333,8 +338,8 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                         {tx.scan_result === 'ACCEPTED' ? 'MEAL' : 'REJ'}
                       </span>
                       <div>
-                        <b>{tx.worker_id}</b>
-                        <small>{timeFmt(tx.scan_timestamp)}</small>
+                        <b>{tx.person_id ?? tx.worker_id}</b>
+                        <small>{tx.person_type ?? 'WORKER'} · {timeFmt(tx.scan_timestamp)}</small>
                       </div>
                     </div>
                     <div className="feed-item-right">

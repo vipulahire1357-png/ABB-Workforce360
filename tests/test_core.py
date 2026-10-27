@@ -114,6 +114,61 @@ def test_code128_barcode_decodes_to_exact_worker_id():
     assert decoded is not None and str(decoded.format)=="Code 128"
     assert decoded.text==value
 
+def test_canteen_schema_migration_preserves_worker_transactions():
+    from sqlalchemy import create_engine
+    from backend import db as dbmod
+
+    old_engine = dbmod.engine
+    legacy_engine = create_engine("sqlite://")
+    dbmod.engine = legacy_engine
+    try:
+        with legacy_engine.begin() as conn:
+            conn.exec_driver_sql(
+                "CREATE TABLE canteen_transactions ("
+                "id INTEGER PRIMARY KEY, worker_id VARCHAR(40) NOT NULL, "
+                "business_date DATE NOT NULL, scan_timestamp DATETIME NOT NULL, "
+                "gate_entry_id INTEGER, operator_id INTEGER, "
+                "scan_result VARCHAR(10) NOT NULL, rejection_reason VARCHAR(60))"
+            )
+            conn.exec_driver_sql("CREATE TABLE visitors (visitor_id VARCHAR(40) PRIMARY KEY)")
+            conn.exec_driver_sql("INSERT INTO visitors (visitor_id) VALUES ('VIS-LEGACY')")
+            conn.exec_driver_sql(
+                "INSERT INTO canteen_transactions "
+                "(id, worker_id, business_date, scan_timestamp, scan_result) "
+                "VALUES (1, 'WIR-LEGACY', '2026-01-01', '2026-01-01 08:00:00', 'ACCEPTED')"
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO canteen_transactions "
+                "(id, worker_id, business_date, scan_timestamp, scan_result) "
+                "VALUES (2, 'VIS-LEGACY', '2026-01-01', '2026-01-01 08:01:00', 'REJECTED')"
+            )
+
+        dbmod.init_db()
+
+        with legacy_engine.connect() as conn:
+            columns = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(canteen_transactions)")}
+            row = conn.exec_driver_sql(
+                "SELECT worker_id, person_type FROM canteen_transactions WHERE id = 1"
+            ).one()
+            visitor_row = conn.exec_driver_sql(
+                "SELECT worker_id, person_type FROM canteen_transactions WHERE id = 2"
+            ).one()
+        assert "person_type" in columns
+        assert row == ("WIR-LEGACY", "WORKER")
+        assert visitor_row == ("VIS-LEGACY", "VISITOR")
+
+        with legacy_engine.begin() as conn:
+            conn.exec_driver_sql("UPDATE canteen_transactions SET person_type = 'WORKER' WHERE id = 2")
+        dbmod.init_db()
+        with legacy_engine.connect() as conn:
+            visitor_row = conn.exec_driver_sql(
+                "SELECT worker_id, person_type FROM canteen_transactions WHERE id = 2"
+            ).one()
+        assert visitor_row == ("VIS-LEGACY", "VISITOR")
+    finally:
+        legacy_engine.dispose()
+        dbmod.engine = old_engine
+
 def test_authenticated_registration_status_photo_and_download(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine
