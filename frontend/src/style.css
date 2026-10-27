@@ -139,6 +139,28 @@
   color: #64748b;
 }
 
+.scanner-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+.scanner-connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.scanner-connection.active {
+  color: #166534;
+}
+.scanner-connection.active .scanner-connection-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px #dcfce7;
+}
+
 /* Result Cards */
 .result-card {
   margin-top: 18px;

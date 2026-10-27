@@ -28,7 +28,27 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
   const [report, setReport] = useState<GateReport | null>(null);
   const [sound, setSound] = useState(true);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [scannerActive, setScannerActive] = useState(false);
+  const scannerActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerKeyTimes = useRef<number[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const trackScannerInput = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const now = Date.now();
+    if (event.key === 'Enter') {
+      const recentKeys = scannerKeyTimes.current.filter((time) => now - time < 1500);
+      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500) {
+        setScannerActive(true);
+        if (scannerActivityTimer.current) clearTimeout(scannerActivityTimer.current);
+        scannerActivityTimer.current = setTimeout(() => setScannerActive(false), 10000);
+      }
+      scannerKeyTimes.current = [];
+      return;
+    }
+    if (event.key.length === 1) {
+      scannerKeyTimes.current = [...scannerKeyTimes.current.filter((time) => now - time < 1500), now];
+    }
+  };
 
   // Play synthesized audio cues
   const playSound = (accepted: boolean) => {
@@ -192,6 +212,7 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
                 placeholder="Scan ID barcode or enter ID (WIR-... / VIS-...)"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
+                onKeyDown={trackScannerInput}
                 autoFocus
                 disabled={busy}
               />
@@ -205,6 +226,10 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
             </div>
             <div className="scan-hint">
               Press Enter or scan with a hardware barcode scanner.
+              <span className={`scanner-connection ${scannerActive ? 'active' : ''}`} role="status" aria-live="polite">
+                <span className="scanner-connection-dot" />
+                {scannerActive ? 'USB scanner active' : 'No USB scanner activity detected'}
+              </span>
             </div>
           </form>
 

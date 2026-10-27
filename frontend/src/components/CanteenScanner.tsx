@@ -25,7 +25,27 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
   const [report, setReport] = useState<CanteenReport | null>(null);
   const [recent, setRecent] = useState<CanteenTransaction[]>([]);
   const [sound, setSound] = useState(true);
+  const [scannerActive, setScannerActive] = useState(false);
+  const scannerActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerKeyTimes = useRef<number[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const trackScannerInput = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const now = Date.now();
+    if (event.key === 'Enter') {
+      const recentKeys = scannerKeyTimes.current.filter((time) => now - time < 1500);
+      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500) {
+        setScannerActive(true);
+        if (scannerActivityTimer.current) clearTimeout(scannerActivityTimer.current);
+        scannerActivityTimer.current = setTimeout(() => setScannerActive(false), 10000);
+      }
+      scannerKeyTimes.current = [];
+      return;
+    }
+    if (event.key.length === 1) {
+      scannerKeyTimes.current = [...scannerKeyTimes.current.filter((time) => now - time < 1500), now];
+    }
+  };
 
   const playSound = (accepted: boolean) => {
     if (!sound) return;
@@ -161,6 +181,7 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
                 placeholder="Scan Worker ID barcode (WIR-...)"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
+                onKeyDown={trackScannerInput}
                 autoFocus
                 disabled={busy}
               />
@@ -174,6 +195,10 @@ export const CanteenScanner: React.FC<CanteenScannerProps> = ({ csrf }) => {
             </div>
             <div className="scan-hint">
               Optimized for fast barcode scanner input. Verifies gate check-in & 1-meal-per-day rule.
+              <span className={`scanner-connection ${scannerActive ? 'active' : ''}`} role="status" aria-live="polite">
+                <span className="scanner-connection-dot" />
+                {scannerActive ? 'USB scanner active' : 'No USB scanner activity detected'}
+              </span>
             </div>
           </form>
 
