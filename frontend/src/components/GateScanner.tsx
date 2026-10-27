@@ -30,23 +30,41 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [scannerActive, setScannerActive] = useState(false);
   const scannerActivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerCompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerKeyTimes = useRef<number[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const markScannerActive = () => {
+    setScannerActive(true);
+    if (scannerActivityTimer.current) clearTimeout(scannerActivityTimer.current);
+    scannerActivityTimer.current = setTimeout(() => setScannerActive(false), 10000);
+  };
+
+  const submitScannedBarcode = (code: string) => {
+    if (!code || busy) return;
+    markScannerActive();
+    void processScan(code);
+  };
 
   const trackScannerInput = (event: React.KeyboardEvent<HTMLInputElement>) => {
     const now = Date.now();
     if (event.key === 'Enter') {
+      event.preventDefault();
+      if (scannerCompleteTimer.current) clearTimeout(scannerCompleteTimer.current);
       const recentKeys = scannerKeyTimes.current.filter((time) => now - time < 1500);
-      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500) {
-        setScannerActive(true);
-        if (scannerActivityTimer.current) clearTimeout(scannerActivityTimer.current);
-        scannerActivityTimer.current = setTimeout(() => setScannerActive(false), 10000);
-      }
+      if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500)
+        submitScannedBarcode(event.currentTarget.value.trim());
       scannerKeyTimes.current = [];
       return;
     }
     if (event.key.length === 1) {
       scannerKeyTimes.current = [...scannerKeyTimes.current.filter((time) => now - time < 1500), now];
+      if (scannerCompleteTimer.current) clearTimeout(scannerCompleteTimer.current);
+      scannerCompleteTimer.current = setTimeout(() => {
+        const recentKeys = scannerKeyTimes.current.filter((time) => Date.now() - time < 1500);
+        if (recentKeys.length >= 4 && recentKeys[recentKeys.length - 1] - recentKeys[0] < 500)
+          submitScannedBarcode(inputRef.current?.value.trim() ?? '');
+      }, 120);
     }
   };
 
@@ -119,9 +137,12 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
     return () => clearInterval(interval);
   }, [result]);
 
-  const handleScan = async (e: React.FormEvent) => {
+  const handleScan = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = barcode.trim();
+    void processScan(barcode.trim());
+  };
+
+  const processScan = async (code: string) => {
     if (!code || busy) return;
 
     setBusy(true);
@@ -225,10 +246,10 @@ export const GateScanner: React.FC<GateScannerProps> = ({ csrf }) => {
               </button>
             </div>
             <div className="scan-hint">
-              Press Enter or scan with a hardware barcode scanner.
+              Scanner input verifies automatically; type an ID and select Verify for manual entry.
               <span className={`scanner-connection ${scannerActive ? 'active' : ''}`} role="status" aria-live="polite">
                 <span className="scanner-connection-dot" />
-                {scannerActive ? 'USB scanner active' : 'No USB scanner activity detected'}
+                {scannerActive ? 'USB scanner detected' : 'Waiting for USB scanner input'}
               </span>
             </div>
           </form>
