@@ -258,9 +258,11 @@ def run_development(no_browser: bool = False) -> int:
             )
             write_json_atomic(state_path, state)
 
-            print(f"Development API: {backend_url} (LAN port {backend_port})", flush=True)
-            print(f"Development frontend: {application_url}", flush=True)
-            print(f"Local browser URL: {browser_url} (camera capture is available on this laptop)", flush=True)
+            print("\nWorkforce360 is ready in your browser.", flush=True)
+            print(f"\nLocal URL:   {browser_url}", flush=True)
+            print(f"Network URL: {application_url}", flush=True)
+            print(f"API URL:     {backend_url}", flush=True)
+            print("\nKeep this window open while using Workforce360. Press Enter here to stop the server.", flush=True)
             print("This development instance has its own runtime state, lock and data root.", flush=True)
             if not no_browser:
                 import webbrowser
